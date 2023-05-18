@@ -1,0 +1,158 @@
+#include <SoftwareSerial.h>
+#include <dht.h>  //Include Libraries
+dht DHT;
+#include <LiquidCrystal_I2C.h>
+
+
+LiquidCrystal_I2C lcd(0x27 ,16,2);  // set the LCD address to 0x3F for a 16 chars and 2 line display
+
+//Alarm reciever's phone number with country code
+const String PHONE_1 = "+919953151391";
+const String PHONE_2 = ""; 
+const String PHONE_3 = "";
+const String PHONE_4 = "";
+
+#define rxPin 2
+#define txPin 3
+SoftwareSerial sim800L(rxPin,txPin);
+
+#define MQ2_pin A3
+#define TempPin A2
+#define buzz_pin 4
+
+void setup()
+{
+  
+  //Begin serial communication: Arduino IDE (Serial Monitor)
+  Serial.begin(9600);
+  //Begin serial communication: SIM800L
+  sim800L.begin(9600);
+  
+  lcd.init();
+  lcd.clear();         
+  
+
+
+  pinMode(buzz_pin, OUTPUT);
+  digitalWrite(buzz_pin,LOW);
+  
+
+  Serial.println("Initializing...");
+  //Once the handshake test is successful, it will back to OK
+  sim800L.println("AT");
+  delay(1000);
+  sim800L.println("AT+CMGF=1");
+  delay(1000);
+  
+
+}
+
+void loop()
+{
+  
+  while(sim800L.available()){
+  Serial.println(sim800L.readString());
+  }
+  
+  int readData = DHT.read11(TempPin); //Temperature
+  float temp = DHT.temperature;
+
+  int MQval = analogRead(MQ2_pin); //Smoke
+  Serial.print("Smoke: ");
+  Serial.print(MQval);
+  Serial.print("  | Temperature: ");
+  Serial.println(temp);
+  delay(1000);
+
+  //The fire is detected, trigger Alarm and send sms
+  if (temp > 50 || MQval > 100 ) //Condition
+  {
+    digitalWrite(buzz_pin,HIGH);
+
+    lcd.backlight();      // Make sure backlight is on
+    lcd.setCursor(2,0);   //Set cursor to character 2 on line 0
+    lcd.print("   WARNING!  ");
+    lcd.setCursor(2,1);   //Move cursor to character 2 on line 1
+    lcd.print("FIRE Detected");
+  
+    
+    Serial.println("Fire Detected.");
+    send_multi_sms();
+    multi_call();
+    
+  }
+  
+  //No fire is detected, turn OFF Alarm
+  else
+  {
+    digitalWrite(buzz_pin,LOW);
+    lcd.clear(); 
+    
+  }
+  
+}
+
+
+void send_multi_sms()
+{
+  if(PHONE_1 != ""){
+    Serial.print("Phone 1: ");
+    Send_sms("Fire is Detected at XYZ_Address", PHONE_1);
+  }
+  if(PHONE_2 != ""){
+    Serial.print("Phone 2: ");
+    Send_sms("Fire is Detected at XYZ_Address", PHONE_2);
+  }
+  if(PHONE_3 != ""){
+    Serial.print("Phone 3: ");
+    Send_sms("Fire is Detected at XYZ_Address", PHONE_3);
+  }
+  if(PHONE_4 != ""){
+    Serial.print("Phone 4: ");
+    Send_sms("Fire is Detected at XYZ_Address", PHONE_4);
+  }
+}
+
+void multi_call()
+{
+  if(PHONE_1 != ""){
+    Serial.print("Phone 1: ");
+    Make_call(PHONE_1);
+  }
+  if(PHONE_2 != ""){
+    Serial.print("Phone 2: ");
+    Make_call(PHONE_2);
+  }
+  if(PHONE_3 != ""){
+    Serial.print("Phone 3: ");
+    Make_call(PHONE_3);
+  }
+  if(PHONE_4 != ""){
+    Serial.print("Phone 4: ");
+    Make_call(PHONE_4);
+  }
+}
+
+
+void Send_sms(String text, String phone)
+{
+    Serial.println("sending sms....");
+    delay(50);
+    sim800L.print("AT+CMGF=1\r");
+    delay(1000);
+    sim800L.print("AT+CMGS=\""+phone+"\"\r");
+    delay(1000);
+    sim800L.print(text);
+    delay(100);
+    sim800L.write(0x1A); 
+    delay(5000);
+}
+
+void Make_call(String phone)
+{
+    Serial.println("calling....");
+    sim800L.println("ATD"+phone+";");
+    delay(20000); //20 sec delay
+    sim800L.println("ATH");
+    delay(1000); //1 sec delay
+}
